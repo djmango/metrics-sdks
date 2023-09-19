@@ -23,7 +23,6 @@ class MetricsMiddleware:
         self.config: MetricsApiConfig = config or settings.README_METRICS_CONFIG  # type: ignore
         assert isinstance(self.config, MetricsApiConfig)
         self.metrics_core = Metrics(self.config)
-        self.config.LOGGER.debug("MetricsMiddleware.__init__")
 
     async def __call__(self, request):
         if asyncio.iscoroutinefunction(self.get_response):
@@ -36,16 +35,12 @@ class MetricsMiddleware:
         self.preamble(request)
         response = self.get_response(request)
         self.handle_response(request, response)
-        self.config.LOGGER.debug("sync_process_request")
-        self.config.LOGGER.debug(type(response))
         return response
 
     async def async_process_request(self, request):
         self.preamble(request)
         response = await self.get_response(request)
         self.handle_response(request, response)
-        self.config.LOGGER.debug("async_process_request")
-        self.config.LOGGER.debug(type(response))
         return response
 
     def preamble(self, request):

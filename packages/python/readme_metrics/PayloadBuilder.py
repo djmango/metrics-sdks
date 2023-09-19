@@ -1,14 +1,13 @@
-from collections.abc import Mapping
 import importlib
 import json
-from json import JSONDecodeError
-from logging import Logger
 import platform
 import time
-
+import uuid
+from collections.abc import Mapping
+from json import JSONDecodeError
+from logging import Logger
 from typing import List, Optional
 from urllib import parse
-import uuid
 
 from readme_metrics import ResponseInfoWrapper
 
@@ -75,10 +74,18 @@ class PayloadBuilder:
         if group is None:
             return None
 
+        if hasattr(request, "environ"):  # WSGI
+            client_ip = request.environ.get("REMOTE_ADDR")
+        elif hasattr(request, "scope"):  # ASGI
+            client_ip = request.scope.get("client")[0]
+        else:
+            client_ip = "unknown"
+            self.logger.warning("Unable to determine client IP address")
+
         payload = {
             "_id": str(uuid.uuid4()),
             "group": group,
-            "clientIPAddress": request.environ.get("REMOTE_ADDR"),
+            "clientIPAddress": client_ip,
             "development": self.development_mode,
             "request": {
                 "log": {
@@ -205,10 +212,17 @@ class PayloadBuilder:
             else:
                 post_data = self._process_body(content_type, request.rm_body)
 
+        if hasattr(request, "environ"):  # WSGI
+            http_version = request.environ.get("SERVER_PROTOCOL")
+        elif hasattr(request, "scope"):  # ASGI
+            http_version = "HTTP/{}".format(request.scope.get("http_version"))
+        else:
+            self.logger.warning("Unable to determine HTTP version")
+            http_version = "unknown"
         payload = {
             "method": request.method,
             "url": self._build_base_url(request),
-            "httpVersion": request.environ["SERVER_PROTOCOL"],
+            "httpVersion": http_version,
             "headers": [{"name": k, "value": v} for (k, v) in headers.items()],
             "headersSize": -1,
             "queryString": [{"name": k, "value": v} for (k, v) in queryString],
@@ -267,9 +281,10 @@ class PayloadBuilder:
         if hasattr(request, "query_string"):
             # works for Werkzeug request objects only
             result = request.query_string
-        elif "QUERY_STRING" in request.environ:
-            # works for Django, and possibly other request objects too
-            result = request.environ["QUERY_STRING"]
+        elif hasattr(request, "environ"):  # WSGI
+            result = request.environ.get("QUERY_STRING", "")
+        elif hasattr(request, "scope"):  # ASGI
+            result = request.scope.get("query_string", b"").decode("utf-8")
         else:
             raise QueryNotFound(
                 "Don't know how to retrieve query string from this type of request"
@@ -302,18 +317,28 @@ class PayloadBuilder:
 
         scheme, host, path = None, None, None
 
-        if "wsgi.url_scheme" in request.environ:
-            scheme = request.environ["wsgi.url_scheme"]
+        # For scheme
+        if hasattr(request, "environ"):
+            scheme = request.environ.get("wsgi.url_scheme", "")
+        elif hasattr(request, "scope"):
+            scheme = request.scope.get("scheme", "")
 
+        # For host
         # pylint: disable=protected-access
         if hasattr(request, "_get_raw_host"):
-            # Django request objects already have a properly formatted host field
+            # Django request objects
             host = request._get_raw_host()
-        elif "HTTP_HOST" in request.environ:
+        elif hasattr(request, "environ") and "HTTP_HOST" in request.environ:
             host = request.environ["HTTP_HOST"]
+        elif hasattr(request, "scope"):
+            headers = dict(request.scope.get("headers", []))
+            host = headers.get(b"host", b"").decode("utf-8")
 
-        if "PATH_INFO" in request.environ:
-            path = request.environ["PATH_INFO"]
+        # For path
+        if hasattr(request, "environ"):
+            path = request.environ.get("PATH_INFO", "")
+        elif hasattr(request, "scope"):
+            path = request.scope.get("path", "")
 
         if scheme and path and host:
             if len(query_string) > 0:
@@ -369,7 +394,7 @@ class PayloadBuilder:
             return mapping
 
         result = {}
-        for (key, value) in mapping.items():
+        for key, value in mapping.items():
             if self.denylist and key in self.denylist:
                 result[key] = _redact_value(value)
             elif self.allowlist and key not in self.allowlist:

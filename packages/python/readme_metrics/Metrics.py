@@ -69,6 +69,7 @@ class Metrics:
             )
             return
 
+        payload = None
         try:
             payload = self.payload_builder(request, response)
             if payload is None:
