@@ -1,7 +1,10 @@
 import asyncio
 import time
+from collections.abc import Callable
 from datetime import datetime
+from inspect import iscoroutinefunction
 
+from asgiref.sync import iscoroutinefunction, markcoroutinefunction
 from django.conf import settings
 
 from readme_metrics import MetricsApiConfig
@@ -11,12 +14,16 @@ from readme_metrics.ResponseInfoWrapper import ResponseInfoWrapper
 
 class MetricsMiddleware:
     async_capable = True
+    sync_capable = False
 
-    def __init__(self, get_response, config=None):
+    def __init__(self, get_response: Callable, config=None):
         self.get_response = get_response
-        self.config = config or settings.README_METRICS_CONFIG
+        if iscoroutinefunction(self.get_response):
+            markcoroutinefunction(self)
+        self.config: MetricsApiConfig = config or settings.README_METRICS_CONFIG  # type: ignore
         assert isinstance(self.config, MetricsApiConfig)
         self.metrics_core = Metrics(self.config)
+        self.config.LOGGER.debug("MetricsMiddleware.__init__")
 
     async def __call__(self, request):
         if asyncio.iscoroutinefunction(self.get_response):
@@ -29,12 +36,16 @@ class MetricsMiddleware:
         self.preamble(request)
         response = self.get_response(request)
         self.handle_response(request, response)
+        self.config.LOGGER.debug("sync_process_request")
+        self.config.LOGGER.debug(type(response))
         return response
 
     async def async_process_request(self, request):
         self.preamble(request)
         response = await self.get_response(request)
         self.handle_response(request, response)
+        self.config.LOGGER.debug("async_process_request")
+        self.config.LOGGER.debug(type(response))
         return response
 
     def preamble(self, request):
