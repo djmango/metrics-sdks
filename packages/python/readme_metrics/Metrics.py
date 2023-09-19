@@ -58,9 +58,9 @@ class Metrics:
             response (ResponseInfoWrapper): Response object
         """
         if isinstance(request, ASGIRequest):
-                host = request.headers.get('host')
-            else:  # Assume it's WSGI otherwise
-                host = request.environ["HTTP_HOST"]
+            host = request.headers.get("host")
+        else:  # Assume it's WSGI otherwise
+            host = request.environ["HTTP_HOST"]
 
         if not self.host_allowed(host):
             # pylint: disable=C0301
