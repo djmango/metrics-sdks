@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "readme-metrics"
+version = "3.0.4"
+description = "ReadMe API Metrics SDK"
+authors = ["ReadMe <support@readme.io>"]
+readme = "README.md"
+homepage = "https://github.com/readmeio/metrics-sdks/tree/main/packages/python"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+starlette = "^0.31.1"
+
+[tool.poetry.dev-dependencies]
+Flask = "*"
+Django = "*"
+requests = "*"
+Werkzeug = "*"
+
+[tool.poetry.extras]
+Flask = ["Flask"]
+Django = ["Django"]
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -1,9 +1,9 @@
 # pylint: disable=too-many-locals
+import datetime
 import io
 import time
-import datetime
 
-from werkzeug import Request
+from starlette.requests import Request
 
 from readme_metrics.Metrics import Metrics
 from readme_metrics.MetricsApiConfig import MetricsApiConfig
