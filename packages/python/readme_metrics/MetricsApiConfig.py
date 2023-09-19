@@ -1,5 +1,5 @@
 # pylint: disable=too-many-instance-attributes
-from typing import List, Any, Callable
+from typing import Any, Callable, List
 
 from readme_metrics.util import util_build_logger
 
@@ -43,7 +43,7 @@ class MetricsApiConfig:
 
     README_API_KEY: str = None
     BUFFER_LENGTH: int = 1
-    GROUPING_FUNCTION: Callable[[Any], None] = lambda req: None
+    GROUPING_FUNCTION: Callable[[Any], None | dict[str, str]] = lambda req: None
     IS_DEVELOPMENT_MODE: bool = False
     IS_BACKGROUND_MODE: bool = True
     DENYLIST: List[str] = []

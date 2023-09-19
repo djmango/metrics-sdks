@@ -1,13 +1,15 @@
 import atexit
+import importlib
 import math
 import queue
 import threading
 import traceback
-import importlib
+
+from django.core.handlers.asgi import ASGIRequest
 
 from readme_metrics import MetricsApiConfig
-from readme_metrics.publisher import publish_batch
 from readme_metrics.PayloadBuilder import PayloadBuilder
+from readme_metrics.publisher import publish_batch
 from readme_metrics.ResponseInfoWrapper import ResponseInfoWrapper
 
 
@@ -52,13 +54,18 @@ class Metrics:
         """Enqueues a request/response combination to be submitted the API.
 
         Args:
-            request (Request): Request object from your WSGI server
+            request (Request): Request object from your ASGI/WSGI server
             response (ResponseInfoWrapper): Response object
         """
-        if not self.host_allowed(request.environ["HTTP_HOST"]):
+        if isinstance(request, ASGIRequest):
+                host = request.headers.get('host')
+            else:  # Assume it's WSGI otherwise
+                host = request.environ["HTTP_HOST"]
+
+        if not self.host_allowed(host):
             # pylint: disable=C0301
             self.config.LOGGER.debug(
-                f"Not enqueueing request, host {request.environ['HTTP_HOST']} not in ALLOWED_HTTP_HOSTS"
+                f"Not enqueueing request, host {host} not in ALLOWED_HTTP_HOSTS"
             )
             return
 
@@ -69,6 +76,7 @@ class Metrics:
                 # None (an indication that the request should not be logged.)
                 self.config.LOGGER.debug("Not enqueueing request, payload is None")
                 return
+            self.queue.put(payload)
         except Exception:
             self.config.LOGGER.debug(
                 "Not enqueueing request, payload construction failed"
@@ -76,7 +84,6 @@ class Metrics:
             if self.config.IS_DEVELOPMENT_MODE:
                 print(traceback.format_exc())
 
-        self.queue.put(payload)
         if self.queue.qsize() >= self.config.BUFFER_LENGTH:
             args = (self.config, self.queue)
             if self.config.IS_BACKGROUND_MODE:
