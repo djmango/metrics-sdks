@@ -2,9 +2,7 @@ import asyncio
 import time
 from collections.abc import Callable
 from datetime import datetime
-from inspect import iscoroutinefunction
 
-from asgiref.sync import iscoroutinefunction, markcoroutinefunction
 from django.conf import settings
 
 from readme_metrics import MetricsApiConfig
@@ -13,33 +11,21 @@ from readme_metrics.ResponseInfoWrapper import ResponseInfoWrapper
 
 
 class MetricsMiddleware:
-    async_capable = True
-    sync_capable = False
-
     def __init__(self, get_response: Callable, config=None):
         self.get_response = get_response
-        if iscoroutinefunction(self.get_response):
-            markcoroutinefunction(self)
-        self.config: MetricsApiConfig = config or settings.README_METRICS_CONFIG  # type: ignore
+        self.config: MetricsApiConfig = config or settings.README_METRICS_CONFIG
         assert isinstance(self.config, MetricsApiConfig)
         self.metrics_core = Metrics(self.config)
 
-    async def __call__(self, request):
-        if asyncio.iscoroutinefunction(self.get_response):
-            response = await self.async_process_request(request)
+    def __call__(self, request):
+        if not asyncio.iscoroutinefunction(self.get_response):
+            return self.sync_process_request(request)
         else:
-            response = self.sync_process_request(request)
-        return response
+            raise NotImplementedError("Async not implemented")
 
     def sync_process_request(self, request):
         self.preamble(request)
         response = self.get_response(request)
-        self.handle_response(request, response)
-        return response
-
-    async def async_process_request(self, request):
-        self.preamble(request)
-        response = await self.get_response(request)
         self.handle_response(request, response)
         return response
 
